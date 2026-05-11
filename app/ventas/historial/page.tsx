@@ -1,26 +1,23 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { Cargando } from '@/components/ui/Cargando'
 import { HistorialVentas } from '@/components/ventas/HistorialVentas'
-import { RolUsuario } from '@/tipos'
 
-export default async function PaginaHistorialVentas() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+export default function PaginaHistorialVentas() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('nombre, rol')
-    .eq('supabase_user_id', session.user.id)
-    .single()
+  useEffect(() => {
+    if (!cargando && !usuario) router.push('/login')
+  }, [usuario, cargando, router])
+
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
   return (
-    <PlantillaPrincipal
-      nombreUsuario={usuario?.nombre || 'Usuario'}
-      rol={(usuario?.rol as RolUsuario) || 'cajero'}
-    >
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Historial de Ventas</h1>

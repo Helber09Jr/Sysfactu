@@ -1,27 +1,20 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
 import { TablaKardex } from '@/components/inventario/TablaKardex'
-import { RolUsuario } from '@/tipos'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { Cargando } from '@/components/ui/Cargando'
 import { Tarjeta } from '@/components/ui/Tarjeta'
 
-export default async function PaginaKardex() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
-
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('nombre, rol')
-    .eq('supabase_user_id', session.user.id)
-    .single()
+export default function PaginaKardex() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
+  useEffect(() => { if (!cargando && !usuario) router.push('/login') }, [usuario, cargando, router])
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
   return (
-    <PlantillaPrincipal
-      nombreUsuario={usuario?.nombre || 'Usuario'}
-      rol={(usuario?.rol as RolUsuario) || 'almacenero'}
-    >
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Kardex de Inventario</h1>

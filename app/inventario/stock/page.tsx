@@ -1,45 +1,23 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
-import { RolUsuario } from '@/tipos'
 import { AlertaStock } from '@/components/inventario/AlertaStock'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { Cargando } from '@/components/ui/Cargando'
 import { Tarjeta } from '@/components/ui/Tarjeta'
+import { INSUMOS_DEMO } from '@/lib/demo/datos'
 
-export default async function PaginaStock() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+export default function PaginaStock() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
+  useEffect(() => { if (!cargando && !usuario) router.push('/login') }, [usuario, cargando, router])
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('nombre, rol')
-    .eq('supabase_user_id', session.user.id)
-    .single()
-
-  const { data: insumosData } = await supabase
-    .from('insumos')
-    .select('*')
-    .eq('activo', true)
-
-  const insumosBajoStock = (insumosData || [])
-    .filter((i: any) => parseFloat(i.stock_actual) <= parseFloat(i.stock_minimo))
-    .map((i: any) => ({
-      id: i.id,
-      nombre: i.nombre,
-      categoria: i.categoria || '',
-      unidadMedida: i.unidad_medida,
-      stockActual: parseFloat(i.stock_actual),
-      stockMinimo: parseFloat(i.stock_minimo),
-      precioUnitario: parseFloat(i.precio_unitario || 0),
-      activo: i.activo
-    }))
+  const insumosBajoStock = INSUMOS_DEMO.filter(i => i.stockActual <= i.stockMinimo)
 
   return (
-    <PlantillaPrincipal
-      nombreUsuario={usuario?.nombre || 'Usuario'}
-      rol={(usuario?.rol as RolUsuario) || 'almacenero'}
-    >
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Estado de Stock</h1>

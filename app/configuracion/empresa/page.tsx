@@ -1,49 +1,27 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
 import { FormularioEmpresa } from '@/components/configuracion/FormularioEmpresa'
-import { RolUsuario } from '@/tipos'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { Cargando } from '@/components/ui/Cargando'
 import { Tarjeta } from '@/components/ui/Tarjeta'
 
-export default async function PaginaEmpresa() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
-
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('nombre, rol')
-    .eq('supabase_user_id', session.user.id)
-    .single()
-
-  if (usuario?.rol !== 'administrador') redirect('/dashboard')
-
-  const { data: empresa } = await supabase
-    .from('empresa')
-    .select('*')
-    .single()
-
-  const empresaInicial = empresa ? {
-    id: empresa.id,
-    ruc: empresa.ruc,
-    razonSocial: empresa.razon_social,
-    direccion: empresa.direccion || '',
-    telefono: empresa.telefono || ''
-  } : undefined
+export default function PaginaEmpresa() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
+  useEffect(() => { if (!cargando && !usuario) router.push('/login') }, [usuario, cargando, router])
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
   return (
-    <PlantillaPrincipal
-      nombreUsuario={usuario?.nombre || 'Usuario'}
-      rol={(usuario?.rol as RolUsuario) || 'administrador'}
-    >
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="space-y-4 max-w-2xl">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Datos de la Empresa</h1>
           <p className="text-gray-500 text-sm">Información que aparecerá en todos los comprobantes</p>
         </div>
         <Tarjeta titulo="Información fiscal">
-          <FormularioEmpresa empresaInicial={empresaInicial} />
+          <FormularioEmpresa empresaInicial={{ ruc: '20512345678', razonSocial: 'WANVENDOR SAC', direccion: 'Av. Principal 123, Lima', telefono: '01-234-5678' }} />
         </Tarjeta>
       </div>
     </PlantillaPrincipal>

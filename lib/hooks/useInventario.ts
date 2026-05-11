@@ -1,47 +1,17 @@
 'use client'
-import { useState, useEffect, useCallback } from 'react'
-import { crearClienteSupabase } from '@/lib/supabase/cliente'
+import { useState, useCallback } from 'react'
 import { Insumo, MovimientoInventario } from '@/tipos'
+import { INSUMOS_DEMO, MOVIMIENTOS_DEMO } from '@/lib/demo/datos'
 
 export function useInventario() {
-  const [insumos, setInsumos] = useState<Insumo[]>([])
-  const [movimientos, setMovimientos] = useState<MovimientoInventario[]>([])
-  const [insumosConAlerta, setInsumosConAlerta] = useState<Insumo[]>([])
-  const [estaCargando, setEstaCargando] = useState(false)
+  const [insumos, setInsumos] = useState<Insumo[]>(INSUMOS_DEMO)
+  const [movimientos, setMovimientos] = useState<MovimientoInventario[]>(MOVIMIENTOS_DEMO)
+  const [estaCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const supabase = crearClienteSupabase()
 
-  const obtenerInsumos = useCallback(async () => {
-    setEstaCargando(true)
-    try {
-      const { data, error } = await supabase
-        .from('insumos')
-        .select('*')
-        .eq('activo', true)
-        .order('nombre')
-      if (error) throw error
-      const insumosData = (data || []).map((i: any) => ({
-        id: i.id,
-        nombre: i.nombre,
-        categoria: i.categoria || '',
-        unidadMedida: i.unidad_medida,
-        stockActual: parseFloat(i.stock_actual),
-        stockMinimo: parseFloat(i.stock_minimo),
-        precioUnitario: parseFloat(i.precio_unitario || 0),
-        activo: i.activo
-      }))
-      setInsumos(insumosData)
-      setInsumosConAlerta(insumosData.filter((i: Insumo) => i.stockActual <= i.stockMinimo))
-    } catch {
-      setError('Error al cargar el inventario.')
-    } finally {
-      setEstaCargando(false)
-    }
-  }, [supabase])
+  const insumosConAlerta = insumos.filter(i => i.stockActual <= i.stockMinimo)
 
-  useEffect(() => {
-    obtenerInsumos()
-  }, [obtenerInsumos])
+  const obtenerInsumos = useCallback(async () => {}, [])
 
   const registrarMovimiento = useCallback(async (datos: {
     insumoId: string
@@ -53,114 +23,55 @@ export function useInventario() {
     usuarioId: string
     numeroGuia?: string
   }): Promise<boolean> => {
-    setEstaCargando(true)
-    setError(null)
-    try {
-      const insumo = insumos.find(i => i.id === datos.insumoId)
-      if (!insumo) throw new Error('Insumo no encontrado')
+    const insumo = insumos.find(i => i.id === datos.insumoId)
+    if (!insumo) { setError('Insumo no encontrado'); return false }
 
-      const stockResultante = datos.tipo === 'entrada'
-        ? insumo.stockActual + datos.cantidad
-        : insumo.stockActual - datos.cantidad
+    const stockResultante = datos.tipo === 'entrada'
+      ? insumo.stockActual + datos.cantidad
+      : insumo.stockActual - datos.cantidad
 
-      if (stockResultante < 0) {
-        setError('Stock insuficiente para realizar la salida.')
-        return false
-      }
+    if (stockResultante < 0) { setError('Stock insuficiente para realizar la salida.'); return false }
 
-      const { error: errorMovimiento } = await supabase.from('movimientos_inventario').insert({
-        insumo_id: datos.insumoId,
-        tipo: datos.tipo,
-        cantidad: datos.cantidad,
-        motivo: datos.motivo || null,
-        proveedor: datos.proveedor || null,
-        precio_unitario: datos.precioUnitario || null,
-        stock_resultante: stockResultante,
-        usuario_id: datos.usuarioId,
-        numero_guia: datos.numeroGuia || null
-      })
-      if (errorMovimiento) throw errorMovimiento
+    setInsumos(prev => prev.map(i =>
+      i.id === datos.insumoId ? { ...i, stockActual: stockResultante } : i
+    ))
 
-      const { error: errorStock } = await supabase
-        .from('insumos')
-        .update({ stock_actual: stockResultante })
-        .eq('id', datos.insumoId)
-      if (errorStock) throw errorStock
-
-      await obtenerInsumos()
-      return true
-    } catch (err: any) {
-      setError(err.message || 'Error al registrar el movimiento.')
-      return false
-    } finally {
-      setEstaCargando(false)
+    const nuevoMovimiento: MovimientoInventario = {
+      id: `mov-demo-${Date.now()}`,
+      insumoId: datos.insumoId,
+      nombreInsumo: insumo.nombre,
+      tipo: datos.tipo,
+      cantidad: datos.cantidad,
+      motivo: datos.motivo,
+      proveedor: datos.proveedor,
+      precioUnitario: datos.precioUnitario,
+      stockResultante,
+      usuarioId: datos.usuarioId,
+      fecha: new Date(),
+      numeroGuia: datos.numeroGuia
     }
-  }, [insumos, supabase, obtenerInsumos])
+    setMovimientos(prev => [nuevoMovimiento, ...prev])
+    setError(null)
+    return true
+  }, [insumos])
 
   const obtenerKardex = useCallback(async (insumoId: string, fechaDesde?: Date, fechaHasta?: Date) => {
-    try {
-      let consulta = supabase
-        .from('movimientos_inventario')
-        .select('*')
-        .eq('insumo_id', insumoId)
-        .order('fecha', { ascending: false })
-
-      if (fechaDesde) {
-        consulta = consulta.gte('fecha', fechaDesde.toISOString())
-      }
-      if (fechaHasta) {
-        consulta = consulta.lte('fecha', fechaHasta.toISOString())
-      }
-
-      const { data, error } = await consulta
-      if (error) throw error
-      return (data || []).map((m: any) => ({
-        id: m.id,
-        insumoId: m.insumo_id,
-        tipo: m.tipo,
-        cantidad: parseFloat(m.cantidad),
-        motivo: m.motivo,
-        proveedor: m.proveedor,
-        precioUnitario: m.precio_unitario ? parseFloat(m.precio_unitario) : undefined,
-        stockResultante: parseFloat(m.stock_resultante),
-        usuarioId: m.usuario_id,
-        fecha: new Date(m.fecha),
-        numeroGuia: m.numero_guia
-      }))
-    } catch {
-      return []
-    }
-  }, [supabase])
+    return movimientos.filter(m => {
+      if (m.insumoId !== insumoId) return false
+      if (fechaDesde && m.fecha < fechaDesde) return false
+      if (fechaHasta && m.fecha > fechaHasta) return false
+      return true
+    })
+  }, [movimientos])
 
   const crearInsumo = useCallback(async (datos: Omit<Insumo, 'id'>): Promise<boolean> => {
-    try {
-      const { error } = await supabase.from('insumos').insert({
-        nombre: datos.nombre,
-        categoria: datos.categoria,
-        unidad_medida: datos.unidadMedida,
-        stock_actual: datos.stockActual,
-        stock_minimo: datos.stockMinimo,
-        precio_unitario: datos.precioUnitario,
-        activo: true
-      })
-      if (error) throw error
-      await obtenerInsumos()
-      return true
-    } catch {
-      setError('Error al crear el insumo.')
-      return false
-    }
-  }, [supabase, obtenerInsumos])
+    const nuevoInsumo: Insumo = { ...datos, id: `ins-demo-${Date.now()}` }
+    setInsumos(prev => [...prev, nuevoInsumo])
+    return true
+  }, [])
 
   return {
-    insumos,
-    movimientos,
-    insumosConAlerta,
-    estaCargando,
-    error,
-    obtenerInsumos,
-    registrarMovimiento,
-    obtenerKardex,
-    crearInsumo
+    insumos, movimientos, insumosConAlerta, estaCargando, error,
+    obtenerInsumos, registrarMovimiento, obtenerKardex, crearInsumo
   }
 }

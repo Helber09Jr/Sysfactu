@@ -1,44 +1,32 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
 import { TarjetaKPI } from '@/components/reportes/TarjetaKPI'
 import { Tarjeta } from '@/components/ui/Tarjeta'
 import { DollarSign, ShoppingCart, Users, Package, TrendingUp, Clock } from 'lucide-react'
 import { formatearMoneda } from '@/lib/utilidades/formato'
-import { RolUsuario } from '@/tipos'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { VENTAS_DEMO, MESAS_DEMO, INSUMOS_DEMO } from '@/lib/demo/datos'
+import { Cargando } from '@/components/ui/Cargando'
 
-export default async function PaginaDashboard() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
+export default function PaginaDashboard() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
 
-  if (!session) redirect('/login')
+  useEffect(() => {
+    if (!cargando && !usuario) router.push('/login')
+  }, [usuario, cargando, router])
 
-  const { data: usuarioData } = await supabase
-    .from('usuarios')
-    .select('nombre, rol')
-    .eq('supabase_user_id', session.user.id)
-    .single()
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
-  const nombreUsuario = usuarioData?.nombre || session.user.email || 'Usuario'
-  const rol = (usuarioData?.rol as RolUsuario) || 'cajero'
-
-  // KPIs del día
-  const hoy = new Date()
-  hoy.setHours(0, 0, 0, 0)
-
-  const [{ data: ventasHoy }, { data: mesasActivas }, { data: productosStock }] = await Promise.all([
-    supabase.from('ventas').select('total').eq('estado', 'completada').gte('fecha', hoy.toISOString()),
-    supabase.from('mesas').select('id').eq('estado', 'ocupada'),
-    supabase.from('insumos').select('id').eq('activo', true)
-  ])
-
-  const totalVentasHoy = (ventasHoy || []).reduce((acc: number, v: any) => acc + parseFloat(v.total), 0)
-  const transaccionesHoy = (ventasHoy || []).length
-  const ticketPromedio = transaccionesHoy > 0 ? totalVentasHoy / transaccionesHoy : 0
+  const ventasHoy = VENTAS_DEMO.filter(v => v.estado === 'completada')
+  const totalHoy = ventasHoy.reduce((acc, v) => acc + v.total, 0)
+  const mesasOcupadas = MESAS_DEMO.filter(m => m.estado === 'ocupada').length
+  const ticketPromedio = ventasHoy.length > 0 ? totalHoy / ventasHoy.length : 0
 
   return (
-    <PlantillaPrincipal nombreUsuario={nombreUsuario} rol={rol}>
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
@@ -47,37 +35,17 @@ export default async function PaginaDashboard() {
           </p>
         </div>
 
-        {/* KPIs del día */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <TarjetaKPI
-            titulo="Ventas del día"
-            valor={formatearMoneda(totalVentasHoy)}
-            variacion={12.5}
-            icono={<DollarSign className="h-6 w-6" />}
-            colorIcono="bg-green-100 text-green-600"
-          />
-          <TarjetaKPI
-            titulo="Transacciones"
-            valor={transaccionesHoy.toString()}
-            variacion={8.3}
-            icono={<ShoppingCart className="h-6 w-6" />}
-            colorIcono="bg-blue-100 text-blue-600"
-          />
-          <TarjetaKPI
-            titulo="Ticket promedio"
-            valor={formatearMoneda(ticketPromedio)}
-            icono={<TrendingUp className="h-6 w-6" />}
-            colorIcono="bg-purple-100 text-purple-600"
-          />
-          <TarjetaKPI
-            titulo="Mesas activas"
-            valor={(mesasActivas || []).length.toString()}
-            icono={<Users className="h-6 w-6" />}
-            colorIcono="bg-orange-100 text-orange-600"
-          />
+          <TarjetaKPI titulo="Ventas del día" valor={formatearMoneda(totalHoy)} variacion={12.5}
+            icono={<DollarSign className="h-6 w-6" />} colorIcono="bg-green-100 text-green-600" />
+          <TarjetaKPI titulo="Transacciones" valor={ventasHoy.length.toString()} variacion={8.3}
+            icono={<ShoppingCart className="h-6 w-6" />} colorIcono="bg-blue-100 text-blue-600" />
+          <TarjetaKPI titulo="Ticket promedio" valor={formatearMoneda(ticketPromedio)}
+            icono={<TrendingUp className="h-6 w-6" />} colorIcono="bg-purple-100 text-purple-600" />
+          <TarjetaKPI titulo="Mesas activas" valor={mesasOcupadas.toString()}
+            icono={<Users className="h-6 w-6" />} colorIcono="bg-orange-100 text-orange-600" />
         </div>
 
-        {/* Accesos rápidos */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <Tarjeta titulo="Accesos rápidos">
             <div className="grid grid-cols-2 gap-3">
@@ -87,11 +55,8 @@ export default async function PaginaDashboard() {
                 { ruta: '/inventario', etiqueta: 'Inventario', icono: <Package className="h-5 w-5" />, color: 'bg-orange-600' },
                 { ruta: '/reportes', etiqueta: 'Reportes', icono: <TrendingUp className="h-5 w-5" />, color: 'bg-purple-600' }
               ].map(item => (
-                <a
-                  key={item.ruta}
-                  href={item.ruta}
-                  className={`${item.color} text-white rounded-xl p-4 flex items-center gap-3 hover:opacity-90 transition-opacity`}
-                >
+                <a key={item.ruta} href={item.ruta}
+                  className={`${item.color} text-white rounded-xl p-4 flex items-center gap-3 hover:opacity-90 transition-opacity`}>
                   {item.icono}
                   <span className="font-medium text-sm">{item.etiqueta}</span>
                 </a>
@@ -104,7 +69,7 @@ export default async function PaginaDashboard() {
               <div className="flex items-center justify-between py-2 border-b border-gray-100">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Clock className="h-4 w-4 text-blue-500" />
-                  <span>Última sincronización</span>
+                  <span>Última actualización</span>
                 </div>
                 <span className="text-sm font-medium text-gray-800">Ahora mismo</span>
               </div>
@@ -113,14 +78,14 @@ export default async function PaginaDashboard() {
                   <Package className="h-4 w-4 text-orange-500" />
                   <span>Productos en inventario</span>
                 </div>
-                <span className="text-sm font-medium text-gray-800">{(productosStock || []).length}</span>
+                <span className="text-sm font-medium text-gray-800">{INSUMOS_DEMO.length}</span>
               </div>
               <div className="flex items-center justify-between py-2">
                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <div className="h-2 w-2 bg-green-500 rounded-full" />
-                  <span>Conexión SUNAT</span>
+                  <div className="h-2 w-2 bg-yellow-500 rounded-full" />
+                  <span>Modo</span>
                 </div>
-                <span className="text-sm font-medium text-green-600">Activa</span>
+                <span className="text-sm font-medium text-yellow-600">Demostración</span>
               </div>
             </div>
           </Tarjeta>
