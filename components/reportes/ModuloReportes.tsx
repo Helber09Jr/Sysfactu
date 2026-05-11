@@ -29,7 +29,7 @@ export function ModuloReportes() {
 
   const manejarFiltroPersonalizado = () => {
     if (fechaDesde && fechaHasta) {
-      cargarReportes('personalizado', new Date(fechaDesde), new Date(fechaHasta))
+      cargarReportes('personalizado')
     }
   }
 

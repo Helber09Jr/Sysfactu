@@ -1,7 +1,3 @@
 /** @type {import('next').NextConfig} */
-const configuracion = {
-  experimental: {
-    serverActions: true
-  }
-}
+const configuracion = {}
 module.exports = configuracion
