@@ -1,56 +1,26 @@
 'use client'
-import { useState, useEffect } from 'react'
-import { crearClienteSupabase } from '@/lib/supabase/cliente'
+import { useState } from 'react'
 import { Tabla, ColumnaTabla } from '@/components/ui/Tabla'
 import { Insignia } from '@/components/ui/Insignia'
 import { Boton } from '@/components/ui/Boton'
 import { formatearMoneda, formatearFecha, formatearHora } from '@/lib/utilidades/formato'
 import { ETIQUETAS_METODO_PAGO, ETIQUETAS_TIPO_ATENCION } from '@/lib/utilidades/constantes'
+import { VENTAS_DEMO, USUARIOS_DEMO } from '@/lib/demo/datos'
 import { XCircle } from 'lucide-react'
-
-interface VentaHistorial {
-  id: string
-  fecha: string
-  total: number
-  estado: string
-  metodo_pago: string
-  tipo_atencion: string
-  cajero?: string
-}
+import { Venta } from '@/tipos'
 
 export function HistorialVentas() {
-  const [ventas, setVentas] = useState<VentaHistorial[]>([])
-  const [estaCargando, setEstaCargando] = useState(true)
-  const supabase = crearClienteSupabase()
+  const [ventas, setVentas] = useState<Venta[]>(VENTAS_DEMO)
 
-  useEffect(() => {
-    const cargar = async () => {
-      const { data } = await supabase
-        .from('ventas')
-        .select('*, usuarios:cajero_id(nombre)')
-        .order('fecha', { ascending: false })
-        .limit(100)
-      setVentas((data || []).map((v: any) => ({
-        id: v.id,
-        fecha: v.fecha,
-        total: parseFloat(v.total),
-        estado: v.estado,
-        metodo_pago: v.metodo_pago,
-        tipo_atencion: v.tipo_atencion,
-        cajero: v.usuarios?.nombre
-      })))
-      setEstaCargando(false)
-    }
-    cargar()
-  }, [supabase])
+  const obtenerNombreCajero = (cajeroId: string) =>
+    USUARIOS_DEMO.find(u => u.id === cajeroId)?.nombre || '—'
 
-  const anularVenta = async (id: string) => {
+  const anularVenta = (id: string) => {
     if (!confirm('¿Está seguro de anular esta venta?')) return
-    await supabase.from('ventas').update({ estado: 'anulada' }).eq('id', id)
-    setVentas(prev => prev.map(v => v.id === id ? { ...v, estado: 'anulada' } : v))
+    setVentas(prev => prev.map(v => v.id === id ? { ...v, estado: 'anulada' as const } : v))
   }
 
-  const columnas: ColumnaTabla<VentaHistorial>[] = [
+  const columnas: ColumnaTabla<Venta>[] = [
     {
       clave: 'fecha',
       encabezado: 'Fecha',
@@ -62,17 +32,17 @@ export function HistorialVentas() {
       )
     },
     {
-      clave: 'cajero',
+      clave: 'cajeroId',
       encabezado: 'Cajero',
-      renderizar: (v) => <span>{v || '—'}</span>
+      renderizar: (v) => <span>{obtenerNombreCajero(v)}</span>
     },
     {
-      clave: 'tipo_atencion',
+      clave: 'tipoAtencion',
       encabezado: 'Tipo',
-      renderizar: (v) => <span className="capitalize">{ETIQUETAS_TIPO_ATENCION[v] || v}</span>
+      renderizar: (v) => <span>{ETIQUETAS_TIPO_ATENCION[v] || v}</span>
     },
     {
-      clave: 'metodo_pago',
+      clave: 'metodoPago',
       encabezado: 'Pago',
       renderizar: (v) => <span>{ETIQUETAS_METODO_PAGO[v] || v}</span>
     },
@@ -94,12 +64,7 @@ export function HistorialVentas() {
       clave: 'id',
       encabezado: 'Acciones',
       renderizar: (_, fila) => fila.estado !== 'anulada' ? (
-        <Boton
-          variante="peligro"
-          tamaño="sm"
-          icono={<XCircle className="h-3 w-3" />}
-          onClick={() => anularVenta(fila.id)}
-        >
+        <Boton variante="peligro" tamaño="sm" icono={<XCircle className="h-3 w-3" />} onClick={() => anularVenta(fila.id)}>
           Anular
         </Boton>
       ) : null
@@ -108,12 +73,7 @@ export function HistorialVentas() {
 
   return (
     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-      <Tabla
-        columnas={columnas}
-        datos={ventas}
-        cargando={estaCargando}
-        sinDatos="No hay ventas registradas"
-      />
+      <Tabla columnas={columnas} datos={ventas} sinDatos="No hay ventas registradas" />
     </div>
   )
 }

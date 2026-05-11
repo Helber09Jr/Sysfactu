@@ -1,38 +1,29 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
 import { GestionMesas } from '@/components/mesas/GestionMesas'
-import { RolUsuario } from '@/tipos'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { Cargando } from '@/components/ui/Cargando'
 
-export default async function PaginaMesas() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
-
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('nombre, rol, id')
-    .eq('supabase_user_id', session.user.id)
-    .single()
-
-  const rol = (usuario?.rol as RolUsuario) || 'mozo'
+export default function PaginaMesas() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
+  useEffect(() => { if (!cargando && !usuario) router.push('/login') }, [usuario, cargando, router])
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
   return (
-    <PlantillaPrincipal
-      nombreUsuario={usuario?.nombre || 'Usuario'}
-      rol={rol}
-    >
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="space-y-4 h-full">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">
-            {rol === 'cocinero' ? 'Vista Cocina (KDS)' : 'Gestión de Mesas'}
+            {usuario.rol === 'cocinero' ? 'Vista Cocina (KDS)' : 'Gestión de Mesas'}
           </h1>
           <p className="text-gray-500 text-sm">
-            {rol === 'cocinero' ? 'Gestione los pedidos en tiempo real' : 'Estado del salón en tiempo real'}
+            {usuario.rol === 'cocinero' ? 'Gestione los pedidos en tiempo real' : 'Estado del salón en tiempo real'}
           </p>
         </div>
-        <GestionMesas usuarioId={usuario?.id || ''} rol={rol} />
+        <GestionMesas usuarioId={usuario.id} rol={usuario.rol} />
       </div>
     </PlantillaPrincipal>
   )

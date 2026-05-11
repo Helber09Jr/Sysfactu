@@ -1,33 +1,29 @@
-import { createServerComponentClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+'use client'
+import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import { PlantillaPrincipal } from '@/components/layout/PlantillaPrincipal'
 import { PuntoDeVenta } from '@/components/ventas/PuntoDeVenta'
-import { RolUsuario } from '@/tipos'
+import { useSesion } from '@/lib/demo/ContextoDemo'
+import { Cargando } from '@/components/ui/Cargando'
 
-export default async function PaginaVentas() {
-  const supabase = createServerComponentClient({ cookies })
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/login')
+export default function PaginaVentas() {
+  const { usuario, cargando } = useSesion()
+  const router = useRouter()
 
-  const { data: usuario } = await supabase
-    .from('usuarios')
-    .select('nombre, rol, id')
-    .eq('supabase_user_id', session.user.id)
-    .single()
+  useEffect(() => {
+    if (!cargando && !usuario) router.push('/login')
+  }, [usuario, cargando, router])
 
-  const nombreUsuario = usuario?.nombre || 'Usuario'
-  const rol = (usuario?.rol as RolUsuario) || 'cajero'
-  const cajeroId = usuario?.id || ''
+  if (cargando || !usuario) return <div className="min-h-screen flex items-center justify-center"><Cargando /></div>
 
   return (
-    <PlantillaPrincipal nombreUsuario={nombreUsuario} rol={rol}>
+    <PlantillaPrincipal nombreUsuario={usuario.nombre} rol={usuario.rol}>
       <div className="h-full">
         <div className="mb-4">
           <h1 className="text-2xl font-bold text-gray-800">Punto de Venta</h1>
           <p className="text-gray-500 text-sm">Seleccione productos y procese el cobro</p>
         </div>
-        <PuntoDeVenta cajeroId={cajeroId} />
+        <PuntoDeVenta cajeroId={usuario.id} />
       </div>
     </PlantillaPrincipal>
   )

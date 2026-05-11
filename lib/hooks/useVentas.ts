@@ -1,6 +1,5 @@
 'use client'
 import { useState, useCallback } from 'react'
-import { crearClienteSupabase } from '@/lib/supabase/cliente'
 import { Producto, ItemCarrito, Venta, TipoAtencion, MetodoPago } from '@/tipos'
 
 export function useVentas() {
@@ -8,7 +7,6 @@ export function useVentas() {
   const [descuento, setDescuento] = useState(0)
   const [estaCargando, setEstaCargando] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const supabase = crearClienteSupabase()
 
   const agregarAlCarrito = useCallback((producto: Producto) => {
     setItemsCarrito(prev => {
@@ -29,10 +27,7 @@ export function useVentas() {
   }, [])
 
   const cambiarCantidad = useCallback((productoId: string, cantidad: number) => {
-    if (cantidad <= 0) {
-      quitarDelCarrito(productoId)
-      return
-    }
+    if (cantidad <= 0) { quitarDelCarrito(productoId); return }
     setItemsCarrito(prev =>
       prev.map(item =>
         item.producto.id === productoId
@@ -44,19 +39,16 @@ export function useVentas() {
 
   const agregarObservacion = useCallback((productoId: string, observacion: string) => {
     setItemsCarrito(prev =>
-      prev.map(item =>
-        item.producto.id === productoId ? { ...item, observacion } : item
-      )
+      prev.map(item => item.producto.id === productoId ? { ...item, observacion } : item)
     )
   }, [])
 
   const aplicarDescuento = useCallback((tipo: 'porcentaje' | 'monto', valor: number) => {
     const subtotal = itemsCarrito.reduce((acc, item) => acc + item.subtotal, 0)
-    if (tipo === 'porcentaje') {
-      setDescuento(parseFloat((subtotal * (valor / 100)).toFixed(2)))
-    } else {
-      setDescuento(Math.min(valor, subtotal))
-    }
+    setDescuento(tipo === 'porcentaje'
+      ? parseFloat((subtotal * (valor / 100)).toFixed(2))
+      : Math.min(valor, subtotal)
+    )
   }, [itemsCarrito])
 
   const calcularTotal = useCallback(() => {
@@ -78,80 +70,36 @@ export function useVentas() {
     cajeroId: string
   }): Promise<Venta | null> => {
     setEstaCargando(true)
-    setError(null)
-    try {
-      const total = calcularTotal()
-      const { data: venta, error: errorVenta } = await supabase
-        .from('ventas')
-        .insert({
-          total,
-          descuento,
-          tipo_atencion: datos.tipoAtencion,
-          metodo_pago: datos.metodoPago,
-          monto_recibido: datos.montoRecibido,
-          vuelto: datos.montoRecibido ? parseFloat((datos.montoRecibido - total).toFixed(2)) : null,
-          cajero_id: datos.cajeroId,
-          mesa_id: datos.mesaId || null,
-          estado: 'completada'
-        })
-        .select()
-        .single()
-
-      if (errorVenta) throw errorVenta
-
-      // Registrar ítems de venta
-      const itemsVenta = itemsCarrito.map(item => ({
-        venta_id: venta.id,
-        producto_id: item.producto.id,
-        cantidad: item.cantidad,
-        precio_unitario: item.producto.precio,
-        subtotal: item.subtotal,
-        observacion: item.observacion || null
-      }))
-
-      const { error: errorItems } = await supabase.from('items_venta').insert(itemsVenta)
-      if (errorItems) throw errorItems
-
-      limpiarCarrito()
-      return venta as unknown as Venta
-    } catch (err) {
-      setError('Error al registrar la venta. Intente nuevamente.')
-      return null
-    } finally {
-      setEstaCargando(false)
+    // Simular registro de venta (sin base de datos)
+    await new Promise(r => setTimeout(r, 800))
+    const ventaSimulada: Venta = {
+      id: `vta-demo-${Date.now()}`,
+      items: itemsCarrito,
+      total: calcularTotal(),
+      descuento,
+      tipoAtencion: datos.tipoAtencion,
+      metodoPago: datos.metodoPago,
+      montoRecibido: datos.montoRecibido,
+      vuelto: datos.montoRecibido ? parseFloat((datos.montoRecibido - calcularTotal()).toFixed(2)) : undefined,
+      cajeroId: datos.cajeroId,
+      mesaId: datos.mesaId,
+      fecha: new Date(),
+      estado: 'completada'
     }
-  }, [itemsCarrito, descuento, calcularTotal, limpiarCarrito, supabase])
+    limpiarCarrito()
+    setEstaCargando(false)
+    return ventaSimulada
+  }, [itemsCarrito, descuento, calcularTotal, limpiarCarrito])
 
-  const anularVenta = useCallback(async (ventaId: string, motivo: string) => {
-    setEstaCargando(true)
-    try {
-      const { error } = await supabase
-        .from('ventas')
-        .update({ estado: 'anulada' })
-        .eq('id', ventaId)
-      if (error) throw error
-      return true
-    } catch {
-      setError('Error al anular la venta.')
-      return false
-    } finally {
-      setEstaCargando(false)
-    }
-  }, [supabase])
+  const anularVenta = useCallback(async (_ventaId: string, _motivo: string) => {
+    await new Promise(r => setTimeout(r, 400))
+    return true
+  }, [])
 
   return {
-    itemsCarrito,
-    descuento,
-    estaCargando,
-    error,
-    agregarAlCarrito,
-    quitarDelCarrito,
-    cambiarCantidad,
-    agregarObservacion,
-    aplicarDescuento,
-    calcularTotal,
-    registrarVenta,
-    anularVenta,
-    limpiarCarrito
+    itemsCarrito, descuento, estaCargando, error,
+    agregarAlCarrito, quitarDelCarrito, cambiarCantidad,
+    agregarObservacion, aplicarDescuento, calcularTotal,
+    registrarVenta, anularVenta, limpiarCarrito
   }
 }
